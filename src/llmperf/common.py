@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from llmperf.ray_clients.litellm_client import LiteLLMClient
 from llmperf.ray_clients.openai_chat_completions_client import (
     OpenAIChatCompletionsClient,
@@ -6,12 +6,13 @@ from llmperf.ray_clients.openai_chat_completions_client import (
 from llmperf.ray_clients.sagemaker_client import SageMakerClient
 from llmperf.ray_clients.vertexai_client import VertexAIClient
 from llmperf.ray_llm_client import LLMClient
+from llmperf.vllm_client import VllmClient
 
 
 SUPPORTED_APIS = ["openai", "anthropic", "litellm"]
 
 
-def construct_clients(llm_api: str, num_clients: int) -> List[LLMClient]:
+def construct_clients(llm_api: str, num_clients: int, model: Optional[str] = None) -> List[LLMClient]:
     """Construct LLMClients that will be used to make requests to the LLM API.
 
     Args:

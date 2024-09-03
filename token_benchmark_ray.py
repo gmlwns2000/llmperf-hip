@@ -67,8 +67,16 @@ def get_token_throughput_latencies(
     if not additional_sampling_params:
         additional_sampling_params = {}
 
-    clients = construct_clients(llm_api=llm_api, num_clients=num_concurrent_requests)
-    req_launcher = RequestsLauncher(clients)
+    if llm_api == 'vllm':
+        from llmperf import vllm_client
+        client = vllm_client.VllmClient(model, num_concurrent_requests)
+    else:
+        clients = construct_clients(
+            llm_api=llm_api, 
+            num_clients=num_concurrent_requests,
+            model=model,
+        )
+        req_launcher = RequestsLauncher(clients)
     completed_requests = []
     num_completed_requests = 0
     # make up prompts outside of send loop for faster benchmarking loop
@@ -103,12 +111,19 @@ def get_token_throughput_latencies(
             sampling_params=default_sampling_params,
             llm_api=llm_api,
         )
-        req_launcher.launch_requests(request_config)
+        if llm_api == 'vllm':
+            client.llm_request(request_config)
+        else:
+            req_launcher.launch_requests(request_config)
         # Retrieving results less frequently allows for more concurrent requests
         # to be launched. This will overall reduce the amount of time it takes
         # for the test to run.
         if not (iter % num_concurrent_requests):
-            outs = req_launcher.get_next_ready()
+            if llm_api == 'vllm':
+                outs = client.get_next_ready()
+            else:
+                outs = req_launcher.get_next_ready()
+
             all_metrics = []
             for out in outs:
                 request_metrics, gen_text, _ = out
@@ -131,7 +146,10 @@ def get_token_throughput_latencies(
         print("Test timed out before all requests could be completed.")
 
     # check one last time that there are no remaining results to collect.
-    outs = req_launcher.get_next_ready()
+    if llm_api == 'vllm':
+        outs = client.get_next_ready()
+    else:
+        outs = req_launcher.get_next_ready()
     all_metrics = []
     for out in outs:
         request_metrics, gen_text, _ = out
