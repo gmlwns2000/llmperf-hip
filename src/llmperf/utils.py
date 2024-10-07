@@ -115,6 +115,11 @@ def randomly_sample_sonnet_lines_prompt(
                 break
             prompt += line_to_add
             remaining_prompt_tokens -= get_token_length(line_to_add)
+    prompt += (
+        "Randomly stream lines from the following text "
+        f"with {expect_output_tokens} output tokens. "
+        "Don't generate eos tokens:\n\n"
+    )
     return (prompt, num_prompt_tokens)
 
 
