@@ -23,7 +23,7 @@ from llmperf.utils import (
 )
 from tqdm import tqdm
 
-from transformers import LlamaTokenizerFast
+from transformers import LlamaTokenizerFast, AutoTokenizer
 
 def get_token_throughput_latencies(
     model: str,
@@ -59,8 +59,9 @@ def get_token_throughput_latencies(
     """
     random.seed(11111)
 
-    tokenizer = LlamaTokenizerFast.from_pretrained(
-        "hf-internal-testing/llama-tokenizer"
+    tokenizer = AutoTokenizer.from_pretrained(
+        # "hf-internal-testing/llama-tokenizer"
+        model
     )
     get_token_length = lambda text: len(tokenizer.encode(text))
     
@@ -82,7 +83,7 @@ def get_token_throughput_latencies(
     # make up prompts outside of send loop for faster benchmarking loop
     num_output_tokens_list = []
     prompts = []
-    for i in range(max_num_completed_requests):
+    for i in tqdm(range(max_num_completed_requests), desc='prepare', dynamic_ncols=True):
         num_output_tokens = (sample_random_positive_int(
             mean_output_tokens, stddev_output_tokens
         ))
@@ -103,18 +104,20 @@ def get_token_throughput_latencies(
     ):
         iter += 1
 
-        default_sampling_params = {"max_tokens": num_output_tokens_list.pop()}
-        default_sampling_params.update(additional_sampling_params)
-        request_config = RequestConfig(
-            model=model,
-            prompt=prompts.pop(),
-            sampling_params=default_sampling_params,
-            llm_api=llm_api,
-        )
-        if llm_api == 'vllm':
-            client.llm_request(request_config)
-        else:
-            req_launcher.launch_requests(request_config)
+        if len(num_output_tokens_list) > 0:
+            default_sampling_params = {"max_tokens": num_output_tokens_list.pop()}
+            default_sampling_params.update(additional_sampling_params)
+            request_config = RequestConfig(
+                model=model,
+                prompt=prompts.pop(),
+                sampling_params=default_sampling_params,
+                llm_api=llm_api,
+            )
+            if llm_api == 'vllm':
+                client.llm_request(request_config)
+            else:
+                req_launcher.launch_requests(request_config)
+        
         # Retrieving results less frequently allows for more concurrent requests
         # to be launched. This will overall reduce the amount of time it takes
         # for the test to run.
@@ -127,6 +130,7 @@ def get_token_throughput_latencies(
             all_metrics = []
             for out in outs:
                 request_metrics, gen_text, _ = out
+                # print(gen_text)
                 num_output_tokens = get_token_length(gen_text)
                 if num_output_tokens: 
                     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
